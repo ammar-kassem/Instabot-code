@@ -20,7 +20,7 @@ async def handle_instagram_link(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("الرجاء إرسال رابط إنستغرام صالح.")
         return
 
-    await update.message.reply_text("جارٍ تحميل الفيديو... الرجاء الانتظار.")
+    await update.message.reply_text("لك حاضر من عيوني♥️😌...انطري شوي ولي🙂♥️....و سلميلي عالمطور عمار😎")
 
     try:
         subprocess.run([
