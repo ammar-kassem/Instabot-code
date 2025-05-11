@@ -1,6 +1,6 @@
 import logging
-import requests
-from bs4 import BeautifulSoup
+import os
+import subprocess
 from telegram import Update
 from telegram.ext import CommandHandler, MessageHandler, filters, ApplicationBuilder, ContextTypes
 
@@ -12,41 +12,30 @@ TOKEN = "7925984567:AAHd4bbHef7vhGmc_5i6ZnRiT0IPFnSApKc"
 
 # أمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أرسل رابط إنستغرام (post أو reel) وسأرسل لك الفيديو.")
+    await update.message.reply_text("أرسل رابط إنستغرام (reel أو post) وسأرسله لك كفيديو.")
 
-# التعامل مع روابط إنستغرام
+# معالجة الرابط
 async def handle_instagram_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    original_url = update.message.text.strip()
+    url = update.message.text.strip()
     chat_id = update.message.chat_id
 
-    if "instagram.com" not in original_url:
-        await update.message.reply_text("الرجاء إرسال رابط إنستغرام صحيح.")
+    if "instagram.com" not in url:
+        await update.message.reply_text("رابط غير صالح.")
         return
 
-    await update.message.reply_text("جارٍ التحميل...")
-
-    # تحويل الرابط لـ ddinstagram
-    dd_url = original_url.replace("www.", "").replace("instagram.com", "ddinstagram.com")
+    await update.message.reply_text("جاري التحميل...")
 
     try:
-        # جلب صفحة ddinstagram
-        response = requests.get(dd_url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code != 200:
-            await update.message.reply_text("فشل الوصول لموقع ddinstagram.")
-            return
+        filename = f"{chat_id}.mp4"
+        subprocess.run(["yt-dlp", "-f", "best", "-o", filename, url], check=True)
 
-        # استخراج رابط الفيديو من HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        video_tag = soup.find('video')
+        with open(filename, 'rb') as f:
+            await context.bot.send_video(chat_id=chat_id, video=f)
 
-        if video_tag and video_tag.get('src'):
-            video_url = video_tag['src']
-            await context.bot.send_video(chat_id=chat_id, video=video_url)
-        else:
-            await update.message.reply_text("تعذر العثور على الفيديو.")
+        os.remove(filename)
 
     except Exception as e:
-        await update.message.reply_text(f"حدث خطأ: {e}")
+        await update.message.reply_text(f"فشل التحميل: {e}")
 
 # تشغيل البوت
 if __name__ == '__main__':
