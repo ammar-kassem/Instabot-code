@@ -1,72 +1,54 @@
-import os
 import logging
-import instaloader
+import requests
+from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import CommandHandler, MessageHandler, filters, ApplicationBuilder, ContextTypes
 
-# Logging setup
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# إعداد السجل
+logging.basicConfig(level=logging.INFO)
 
-# Bot token
+# توكن البوت
 TOKEN = "7925984567:AAHd4bbHef7vhGmc_5i6ZnRiT0IPFnSApKc"
 
-# Instagram credentials
-USERNAME = "pixel_value"
-PASSWORD = "Asdf@#$123456789"
-
-# /start command
+# أمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send an Instagram post or Reels link and I'll download the video for you.")
+    await update.message.reply_text("أرسل رابط إنستغرام (post أو reel) وسأرسل لك الفيديو.")
 
-# Handle Instagram links
+# التعامل مع روابط إنستغرام
 async def handle_instagram_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
+    original_url = update.message.text.strip()
     chat_id = update.message.chat_id
 
-    if "instagram.com" not in url:
-        await update.message.reply_text("Please send a valid Instagram link.")
+    if "instagram.com" not in original_url:
+        await update.message.reply_text("الرجاء إرسال رابط إنستغرام صحيح.")
         return
 
-    await update.message.reply_text("Downloading... please wait.")
+    await update.message.reply_text("جارٍ التحميل...")
 
-    loader = instaloader.Instaloader(dirname_pattern=str(chat_id), save_metadata=False)
-
-    # Login to Instagram
-    try:
-        loader.login(USERNAME, PASSWORD)
-    except Exception as e:
-        await update.message.reply_text(f"Failed to log in to Instagram: {e}")
-        return
+    # تحويل الرابط لـ ddinstagram
+    dd_url = original_url.replace("www.", "").replace("instagram.com", "ddinstagram.com")
 
     try:
-        shortcode = ""
-        if "/p/" in url:
-            shortcode = url.split("/p/")[1].split("/")[0]
-        elif "/reel/" in url:
-            shortcode = url.split("/reel/")[1].split("/")[0]
-        elif "/tv/" in url:
-            shortcode = url.split("/tv/")[1].split("/")[0]
-        else:
-            await update.message.reply_text("Unsupported link. Only post or Reels links are allowed.")
+        # جلب صفحة ddinstagram
+        response = requests.get(dd_url, headers={"User-Agent": "Mozilla/5.0"})
+        if response.status_code != 200:
+            await update.message.reply_text("فشل الوصول لموقع ddinstagram.")
             return
 
-        post = instaloader.Post.from_shortcode(loader.context, shortcode)
-        loader.download_post(post, target=str(chat_id))
+        # استخراج رابط الفيديو من HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        video_tag = soup.find('video')
 
-        for file in os.listdir(str(chat_id)):
-            if file.endswith(".mp4"):
-                with open(f"{chat_id}/{file}", 'rb') as video:
-                    await context.bot.send_video(chat_id=chat_id, video=video)
-
-        # Cleanup
-        for file in os.listdir(str(chat_id)):
-            os.remove(f"{chat_id}/{file}")
-        os.rmdir(str(chat_id))
+        if video_tag and video_tag.get('src'):
+            video_url = video_tag['src']
+            await context.bot.send_video(chat_id=chat_id, video=video_url)
+        else:
+            await update.message.reply_text("تعذر العثور على الفيديو.")
 
     except Exception as e:
-        await update.message.reply_text(f"An error occurred while downloading: {e}")
+        await update.message.reply_text(f"حدث خطأ: {e}")
 
-# Run bot
+# تشغيل البوت
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
